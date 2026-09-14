@@ -1,7 +1,7 @@
 // RTK GNSS rover -> phone, over Bluetooth LE.
 //
 //   receiver TX --> UART --> NMEA --> Nordic UART ---> phone
-//                        \-> parse: GST synthesis
+//                        \-> parse: diagnostics
 //   receiver RX <-- UART <----------- corrections <--- phone
 //
 // The phone runs a GNSS app that reads an NMEA sentence stream over Nordic
@@ -18,8 +18,10 @@
 #include "battery.h"
 #include "ble_server.h"
 #include "config.h"
+#include "diag.h"
 #include "gnss_lc29h.h"
 #include "nmea.h"
+#include "rtcm.h"
 
 static HardwareSerial GnssSerial(GNSS_UART_NUM);
 static NmeaParser parser;
@@ -88,6 +90,21 @@ static bool pumpUplink() {
   // out in whatever chunks the UART delivered.
   bleSendRaw(buf, n);
 
+#if ENABLE_DIAG_NMEA
+  // Diagnostics ride the same stream, and only at a sentence boundary for the
+  // same reason the synthesized GST does.
+  static uint32_t lastDiag = 0;
+  if (bleRawActive() && buf[n - 1] == '\n' && millis() - lastDiag >= DIAG_INTERVAL_MS) {
+    lastDiag = millis();
+    char line[96];
+    for (uint8_t i = 0; i < 1 + rtcmTypeCount(); ++i) {
+      size_t len = diagSentence(line, sizeof(line), i, parser.fix());
+      if (!len) break;
+      bleSendRaw((const uint8_t *)line, len);
+    }
+  }
+#endif
+
 #if SYNTH_GST
   // Only ever at a sentence boundary: a UART chunk can end mid-sentence, and
   // injecting there would corrupt the sentence the client is assembling.
@@ -120,6 +137,7 @@ static bool pumpDownlink() {
 
     if (n == 0) break;
 
+    rtcmFeed(buf, n);
     GnssSerial.write(buf, n);
     bytesToGnss += n;
     moved = true;
@@ -158,14 +176,42 @@ static void printStats() {
 
   Serial.printf("[STAT] %s  epochs %lu  %s  sats %u  acc %.3f/%.3f/%.3f m  "
                 "batt %s  rx %lu B  tx %lu B  dl %lu B (dropped %lu)  "
-                "notify-fail %lu\n",
+                "frames ok %lu bad %lu  notify-fail %lu\n",
                 bleRawActive() ? "streaming" : "waiting",
                 (unsigned long)epochs, posTypeName(f.type), f.sats,
                 f.latStd, f.lonStd, f.altStd,
                 batt, (unsigned long)bytesFromGnss, (unsigned long)bytesToGnss,
                 (unsigned long)dl, (unsigned long)dlDrop,
+                (unsigned long)rtcmFramesOk(), (unsigned long)rtcmFramesBad(),
                 (unsigned long)bleNotifyFailures());
 
+  // What the corrections actually contain. A stream can be intact and still be
+  // unusable: the rover tracks L1 and L5, so RTCM signal IDs 22/23/24 (the L5
+  // band) are what let it fix. A base sending only the L1 and L2 bands leaves
+  // one usable frequency, and one frequency floats.
+  char age[24];
+  if (f.diffAge >= 0) snprintf(age, sizeof(age), "%.1f s", f.diffAge);
+  else snprintf(age, sizeof(age), "none");
+  // Where the base actually is. For a network VRS that should be meters from
+  // us, because the VRS is synthesized at the position we send upstream - so a
+  // baseline in kilometers means the client sent a stale or wrong position,
+  // and no amount of correction quality will fix that.
+  char base[64];
+  double bLat, bLon, bAlt;
+  if (rtcmBasePosition(&bLat, &bLon, &bAlt) && f.havePos) {
+    // Equirectangular is ample at these distances and costs no trigonometry
+    // beyond one cosine.
+    const double kMetersPerDeg = 111320.0;
+    double dy = (bLat - f.lat) * kMetersPerDeg;
+    double dx = (bLon - f.lon) * kMetersPerDeg * cos(f.lat * M_PI / 180.0);
+    snprintf(base, sizeof(base), "%u @ %.6f,%.6f baseline %.0f m", f.baseId,
+             bLat, bLon, sqrt(dx * dx + dy * dy));
+  } else {
+    snprintf(base, sizeof(base), "%u (position unknown)", f.baseId);
+  }
+  char msgs[320];
+  rtcmSummary(msgs, sizeof(msgs));
+  Serial.printf("[RTCM] corr age %s  base %s\n  [RTCM] %s\n", age, base, msgs);
 }
 #endif
 

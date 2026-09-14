@@ -80,6 +80,16 @@
 // is both better and the only one that should be in the stream.
 #define SYNTH_GST 1
 
+// Correction diagnostics as proprietary $PRTKA / $PRTKM sentences on the same
+// NMEA stream, every DIAG_INTERVAL_MS. Attaching to the USB console resets this
+// board, which restarts the receiver's navigation filter and destroys RTK
+// convergence - so a survey cannot be watched over USB at all, and the only
+// way to see what the corrections contain is to send it over the air.
+// Apps ignore sentences they do not know; one showing raw NMEA displays them.
+#ifndef ENABLE_DIAG_NMEA
+#define ENABLE_DIAG_NMEA 1
+#endif
+#define DIAG_INTERVAL_MS 10000
 #define NUS_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define NUS_RX_CHAR_UUID "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  // phone writes
 #define NUS_TX_CHAR_UUID "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  // phone reads
