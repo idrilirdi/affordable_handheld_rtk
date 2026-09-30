@@ -1,5 +1,5 @@
-// Quectel LC29H(DA) - configure as an RTK rover at boot, so the receiver
-// needs no PC-side setup before a survey.
+// Quectel LC29H(DA) - configure as an RTK rover over the same UART the bridge
+// then uses, so the receiver needs no PC-side setup before a survey.
 //
 // The LC29H family speaks two proprietary command sets carried as NMEA
 // sentences: $PQTM (Quectel) and $PAIR (the Airoha chipset underneath). Both

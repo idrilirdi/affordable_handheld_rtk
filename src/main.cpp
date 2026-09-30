@@ -21,6 +21,7 @@
 #include "diag.h"
 #include "gnss_lc29h.h"
 #include "nmea.h"
+#include "bridge.h"
 #include "rtcm.h"
 
 static HardwareSerial GnssSerial(GNSS_UART_NUM);
@@ -218,9 +219,13 @@ static void printStats() {
 void setup() {
   ledInit();
 
+  // Unconditional, even when nothing is printed: the USB console is the only
+  // way to reach the GNSS module for a firmware update once this is sealed in
+  // an enclosure, and a build that cannot be bridged cannot be updated.
   Serial.begin(115200);
   // Debug output must never be able to stall a survey: drop it instead of
-  // waiting for a host that may not be listening.
+  // waiting for a host that may not be listening. The bridge restores a real
+  // timeout while it is active, where dropping would corrupt an image.
   Serial.setTxTimeoutMs(0);
 #if DEBUG_USB
   // On USB-CDC boards the port only exists once the host enumerates it, well
@@ -234,6 +239,7 @@ void setup() {
 
   // Before the radio, not after: the receiver echoes its replies, and a phone
   // that connected early would otherwise be fed the command transcript.
+  bridgeBegin(GnssSerial);
   gnssInit(GnssSerial);
 
   batteryBegin();
@@ -244,6 +250,14 @@ void setup() {
 }
 
 void loop() {
+  // Before anything else, and regardless of what else the device is doing: a
+  // unit that cannot be put into bridge mode cannot have its receiver updated.
+  if (bridgeActive()) {
+    bridgeTask();
+    return;
+  }
+  if (bridgePoll()) return;
+
   gnssInitTask(GnssSerial);
   bool busy = pumpUplink();
   busy |= pumpDownlink();

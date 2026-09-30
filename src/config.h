@@ -164,6 +164,49 @@
 // ---------------------------------------------------------------------------
 #define DEBUG_USB 1
 
+// Transparent USB <-> GNSS bridge, for updating the receiver's own firmware.
+//
+// The production board has no USB of its own - only RX, TX, GND and power - so
+// once it is in a sealed enclosure the ESP32 is the only route to it. Without
+// this, a fielded unit could never take a GNSS firmware update.
+#define BRIDGE_ENABLE 1
+
+// Pinned, never negotiated. The ESP32-C6 has USB Serial/JTAG rather than full
+// USB-OTG, so a host baud change never reaches the application and the bridge
+// cannot follow one. Flash with the 115200 download agent and stay there: a
+// 4 MB image takes about six minutes instead of one, which is a fair price for
+// not needing USB-OTG.
+#define BRIDGE_BAUD 115200
+
+// Typed by the operator, or sent by a script, on the USB console.
+#define BRIDGE_COMMAND "$PRTKFLASH"
+
+// Debug output drops rather than blocks (see printStats), which would silently
+// corrupt a firmware image. While bridging, the host is definitely reading, so
+// writes may wait.
+#define BRIDGE_TX_TIMEOUT_MS 1000
+
+// GPIO driving the load switch on the module's supply, or -1 if it is wired
+// permanently on. Quectel recommends MCU control of VCC in any case, both to
+// save power and to restart a module that has hung. Flashing needs the module
+// freshly powered while the tool handshakes, and with no reset pin on the
+// production header, cutting its power is the only way to arrange that.
+//
+// Active high because of the gate driver, which is also not optional. The switch
+// is a high-side P-FET with its source on the cell, and the cell sits up to
+// 4.2 V - a 3.3 V GPIO on the gate would leave Vgs at -0.9 V, partly on. An
+// N-FET or NPN pulls the P-FET gate down when the GPIO is high.
+//
+// On the carrier board this is D5 (GPIO23): D3, the obvious spare, is the
+// red LED.
+#ifndef PIN_GNSS_POWER
+#define PIN_GNSS_POWER -1
+#endif
+#define GNSS_POWER_ACTIVE_HIGH 1
+
+// How long the module's supply needs to settle before its boot ROM is ready.
+#define BRIDGE_POWER_SETTLE_MS 120
+
 // Echo raw receiver bytes to the USB console. Diagnostic only - it competes
 // with the status lines and is noisy at 1 Hz with GSV enabled.
 #ifndef DEBUG_NMEA_ECHO
