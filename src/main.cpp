@@ -1,7 +1,7 @@
 // RTK GNSS rover -> phone, over Bluetooth LE.
 //
 //   receiver TX --> UART --> NMEA --> Nordic UART ---> phone
-//                        \-> parse: diagnostics
+//                        \-> parse: LEDs, diagnostics
 //   receiver RX <-- UART <----------- corrections <--- phone
 //
 // The phone runs a GNSS app that reads an NMEA sentence stream over Nordic
@@ -22,10 +22,16 @@
 #include "gnss_lc29h.h"
 #include "nmea.h"
 #include "bridge.h"
+#include "status_led.h"
 #include "rtcm.h"
+#include "scatter.h"
 
 static HardwareSerial GnssSerial(GNSS_UART_NUM);
 static NmeaParser parser;
+// Spread of the float position only: single and fixed positions would mix two
+// different solutions into one number.
+static Scatter floatScatter;
+
 static uint32_t bytesFromGnss = 0;
 static uint32_t bytesToGnss = 0;
 static uint32_t epochs = 0;
@@ -50,8 +56,31 @@ static inline void ledSet(bool on) {
 static void ledInit() {
   pinMode(LED_BUILTIN, OUTPUT);
   ledSet(false);
+  pinMode(PIN_LED_RED, OUTPUT);
+  pinMode(PIN_LED_YELLOW, OUTPUT);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+
+  // Lamp check at power-up: each lamp alone, in board order, so a dead or
+  // swapped LED is obvious before anyone trusts what they show.
+  const int lamps[] = {PIN_LED_RED, PIN_LED_YELLOW, PIN_LED_GREEN};
+  for (int pin : lamps) {
+    digitalWrite(pin, HIGH);
+    delay(400);
+    digitalWrite(pin, LOW);
+  }
 }
 
+// The three status lamps. Driven from the same fix the rest of the firmware
+// reads, so what a bystander sees and what the console says cannot disagree.
+static void statusLedTask() {
+  const Lamps l = statusPattern(
+      statusOf(parser.fix(), parser.fix().diffAge, batteryPercent(),
+               false, floatScatter.rms(FLOAT_SCATTER_MIN_SAMPLES)),
+      millis());
+  digitalWrite(PIN_LED_RED, l.red);
+  digitalWrite(PIN_LED_YELLOW, l.yellow);
+  digitalWrite(PIN_LED_GREEN, l.green);
+}
 static void ledTask() {
   const bool linked = bleRawActive();
   const uint32_t period = linked ? 2000 : 600;
@@ -87,6 +116,11 @@ static bool pumpUplink() {
 
   uint8_t updated = parser.feed(buf, n);
   if (updated & (NMEA_UPD_POS | NMEA_UPD_STATE)) epochs++;
+  if (updated & (NMEA_UPD_POS | NMEA_UPD_STATE)) {
+    const GnssFix &f = parser.fix();
+    if (f.havePos && f.type == PosType::Float) floatScatter.add(f.lat, f.lon);
+    else floatScatter.clear();
+  }
   // Raw mirror is a straight passthrough - it must not be reframed, so it goes
   // out in whatever chunks the UART delivered.
   bleSendRaw(buf, n);
@@ -262,6 +296,7 @@ void loop() {
   bool busy = pumpUplink();
   busy |= pumpDownlink();
   ledTask();
+  statusLedTask();
   batteryTask();
   blePublishBattery(batteryPercent());
 #if DEBUG_USB

@@ -15,5 +15,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/diag_test diag_test.cpp ../src/
 g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/skyview_test skyview_test.cpp ../src/skyview.cpp ../src/textbuf.cpp ../src/nmea.cpp
 /tmp/skyview_test
 
+g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/status_led_test status_led_test.cpp ../src/status_led.cpp ../src/scatter.cpp ../src/nmea.cpp ../src/skyview.cpp ../src/textbuf.cpp
+/tmp/status_led_test
 
 

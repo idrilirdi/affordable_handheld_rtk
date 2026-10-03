@@ -127,6 +127,33 @@
 #define BLE_CONN_TIMEOUT 600       // 6 s
 
 // ---------------------------------------------------------------------------
+// Status LEDs
+// ---------------------------------------------------------------------------
+// Status LEDs: three discrete SMD parts, one GPIO each, not an addressable
+// strip. Red, yellow and green - deliberately not blue. Blue and pure-green
+// dice have a forward voltage of about 3.0-3.2 V, and driven from a 3.3 V pin
+// there is no headroom left: they come out dim and get dimmer as the cell
+// sags. Red, yellow and standard green sit near 2 V and drive properly.
+//
+// Series resistors, at roughly 8 mA: 150R for red and yellow, 100R for green.
+// A 5050 will take far more, but the point here is to be seen in daylight for
+// a moment, not to light the field, and the cell has better uses.
+#define PIN_LED_RED 21             // D3  - no fix, or corrections missing
+#define PIN_LED_YELLOW 2           // D2  - acquiring, single or SBAS
+#define PIN_LED_GREEN 22           // D4  - RTK float (blinking) or fixed (solid)
+
+// Float is only shown as plain green when the receiver rates it within this
+// (horizontal, from GST or EPE); worse, and yellow follows the green. If the
+// position has nonetheless held within FLOAT_STEADY_SCATTER_M rms over the last
+// SCATTER_WINDOW epochs (at least FLOAT_SCATTER_MIN_SAMPLES of them), the yellow
+// is a long pulse instead: the estimate is probably pessimistic.
+#define FLOAT_GOOD_ACC_M 1.0f
+#define FLOAT_STEADY_SCATTER_M 0.5f
+#define FLOAT_SCATTER_MIN_SAMPLES 10
+
+// Kept so a board with one LED still builds; it maps to the green.
+#define PIN_STATUS_LED PIN_LED_GREEN
+// ---------------------------------------------------------------------------
 // Battery
 // ---------------------------------------------------------------------------
 // The XIAO ESP32-C6 has no battery divider of its own: an external 100k/100k
