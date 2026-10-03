@@ -22,7 +22,9 @@
 #include "gnss_lc29h.h"
 #include "nmea.h"
 #include "bridge.h"
+#include "provisioning.h"
 #include "status_led.h"
+#include "ntrip.h"
 #include "rtcm.h"
 #include "scatter.h"
 
@@ -71,11 +73,15 @@ static void ledInit() {
 }
 
 // The three status lamps. Driven from the same fix the rest of the firmware
-// reads, so what a bystander sees and what the console says cannot disagree.
+// reads, so what a bystander sees and what the panel says cannot disagree.
+//
+// The portal pattern only while the portal has the device to itself. With the
+// rover surveying alongside it - the bench build, debug mode - the fix is what
+// matters, and a portal pattern on top hid it entirely.
 static void statusLedTask() {
   const Lamps l = statusPattern(
       statusOf(parser.fix(), parser.fix().diffAge, batteryPercent(),
-               false, floatScatter.rms(FLOAT_SCATTER_MIN_SAMPLES)),
+               provisioningExclusive(), floatScatter.rms(FLOAT_SCATTER_MIN_SAMPLES)),
       millis());
   digitalWrite(PIN_LED_RED, l.red);
   digitalWrite(PIN_LED_YELLOW, l.yellow);
@@ -116,6 +122,8 @@ static bool pumpUplink() {
 
   uint8_t updated = parser.feed(buf, n);
   if (updated & (NMEA_UPD_POS | NMEA_UPD_STATE)) epochs++;
+  // On every GGA, so losing the fix withdraws the position as well.
+  if (updated & (NMEA_UPD_POS | NMEA_UPD_STATE)) ntripSetGga(parser.lastGga());
   if (updated & (NMEA_UPD_POS | NMEA_UPD_STATE)) {
     const GnssFix &f = parser.fix();
     if (f.havePos && f.type == PosType::Float) floatScatter.add(f.lat, f.lon);
@@ -168,7 +176,17 @@ static bool pumpDownlink() {
     if (room == 0) break;  // let the UART drain, resume next loop
     if (room > sizeof(buf)) room = sizeof(buf);
 
-    size_t n = bleReadDownlink(buf, room);
+    // One source, chosen by the mode, never both: two streams interleaved at
+    // chunk boundaries would split frames and corrupt both. In device mode
+    // anything the phone writes is discarded unread rather than queued.
+    size_t n;
+    if (credMode() == CRED_DEVICE) {
+      uint8_t junk[64];
+      while (bleReadDownlink(junk, sizeof(junk))) {}
+      n = ntripRead(buf, room);
+    } else {
+      n = bleReadDownlink(buf, room);
+    }
 
     if (n == 0) break;
 
@@ -247,11 +265,21 @@ static void printStats() {
   char msgs[320];
   rtcmSummary(msgs, sizeof(msgs));
   Serial.printf("[RTCM] corr age %s  base %s\n  [RTCM] %s\n", age, base, msgs);
+  if (credMode() == CRED_DEVICE) {
+    char nt[160];
+    ntripStatus(nt, sizeof(nt));
+    Serial.printf("[%s]\n", nt);
+  }
 }
 #endif
 
 void setup() {
   ledInit();
+
+  // Before anything else: holding BOOT at power-on asks for the WiFi portal,
+  // and that decision has to be made while the button is still held. When it
+  // is not wanted the radio is switched off rather than left idle.
+  const bool portal = provisioningBegin();
 
   // Unconditional, even when nothing is printed: the USB console is the only
   // way to reach the GNSS module for a firmware update once this is sealed in
@@ -278,9 +306,16 @@ void setup() {
 
   batteryBegin();
   bleBegin();
+  ntripBegin();
 
   DBG("\n[SYS] %s - UART%d @ %d (RX=GPIO%d, TX=GPIO%d)\n", bleDeviceName(),
       GNSS_UART_NUM, GNSS_BAUD, PIN_GNSS_RX, PIN_GNSS_TX);
+  if (portal && PROV_ALWAYS_ON)
+    DBG("[SYS] WiFi portal open (bench build: stays up, does not time out)\n");
+  else if (portal)
+    DBG("[SYS] WiFi portal open for %lu s\n", (unsigned long)(PROV_TIMEOUT_MS / 1000));
+  else if (provisionedSsid()[0])
+    DBG("[SYS] WiFi credentials stored for '%s' (radio off)\n", provisionedSsid());
 }
 
 void loop() {
@@ -292,16 +327,48 @@ void loop() {
   }
   if (bridgePoll()) return;
 
+  const uint32_t tLoopStart = millis();
+
+  // A deliberate, bounded provisioning session owns the device: the radio is
+  // busy and nobody is surveying. In debug mode, and on the bench build, the
+  // portal only rides along and the survey has to keep running underneath it.
+  if (provisioningActive()) {
+    provisioningTask();
+    if (provisioningExclusive()) {
+      ledTask();
+      statusLedTask();
+      return;
+    }
+    provisioningPublish(parser.fix(), parser.sky(), bytesFromGnss, bytesToGnss, epochs);
+  }
+
+  // Where the time actually goes, section by section.
+  static uint32_t worst[PROV_PROFILE_SLOTS] = {0};
+  uint32_t mark = tLoopStart;
+  auto lap = [&](uint8_t slot, const char *name) {
+    const uint32_t now = millis();
+    if (now - mark > worst[slot]) worst[slot] = now - mark;
+    mark = now;
+    provisioningProfile(slot, name, worst[slot]);
+  };
+
+  lap(0, "portal");
   gnssInitTask(GnssSerial);
   bool busy = pumpUplink();
+  lap(1, "uplink");
   busy |= pumpDownlink();
+  lap(2, "downlink");
   ledTask();
   statusLedTask();
+  lap(3, "led");
   batteryTask();
+  lap(4, "batt");
   blePublishBattery(batteryPercent());
+  lap(5, "blebatt");
 #if DEBUG_USB
   printStats();
 #endif
+  lap(6, "stats");
 
   // Yield when idle: a tight loop() starves the idle task on this core and
   // eventually trips the task watchdog.

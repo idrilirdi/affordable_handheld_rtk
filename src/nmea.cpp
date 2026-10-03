@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// For the console and the logs.
+// For the debug panel, the console and the logs.
 const char *posTypeName(PosType t) {
   switch (t) {
     case PosType::Fixed: return "FIXED";

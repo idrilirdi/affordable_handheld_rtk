@@ -11,6 +11,8 @@ g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/rtcm_test rtcm_test.cpp ../src/
 g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/diag_test diag_test.cpp ../src/diag.cpp ../src/rtcm.cpp ../src/skyview.cpp ../src/textbuf.cpp
 /tmp/diag_test
 
+g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/fieldstats_test fieldstats_test.cpp ../src/fieldstats.cpp ../src/textbuf.cpp
+/tmp/fieldstats_test
 
 g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/skyview_test skyview_test.cpp ../src/skyview.cpp ../src/textbuf.cpp ../src/nmea.cpp
 /tmp/skyview_test

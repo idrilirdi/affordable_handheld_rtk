@@ -127,8 +127,38 @@
 #define BLE_CONN_TIMEOUT 600       // 6 s
 
 // ---------------------------------------------------------------------------
-// Status LEDs
+// WiFi provisioning
 // ---------------------------------------------------------------------------
+// The phone normally fetches the corrections, so the device needs WiFi only for
+// setup, the debug panel, and the optional device-side NTRIP client. The portal
+// costs about 35 mA - over half again on top of the 62 mA the rest of the
+// device draws (measured, docs/HARDWARE.md). So WiFi stays off, and the portal
+// is asked for deliberately and closes itself again.
+//
+// Hold the BOOT button while powering on to open it. Nothing else uses that
+// button once running, so this needs no extra hardware and will not happen by
+// accident in a pocket.
+#ifndef ENABLE_WIFI_PROVISIONING
+#define ENABLE_WIFI_PROVISIONING 1
+#endif
+
+// Bench setting: bring the portal up at every boot and never time it out.
+// Entering it otherwise means holding BOOT while power is applied, which needs
+// a power button a test rig may not have. The bench build turns it on; keep it
+// off for anything running on the cell - always-on WiFi is the largest load on
+// the board by far.
+#ifndef PROV_ALWAYS_ON
+#define PROV_ALWAYS_ON 0
+#endif
+
+#define PROV_BUTTON_PIN 9          // BOOT on the XIAO ESP32-C6, low when held
+
+// Mode selector: which end of the correction path holds the NTRIP account.
+// Polled live rather than read at boot, so it can be changed without a reset.
+// Recessed in the enclosure - a strap across a breast pocket must not be able
+// to move it mid-survey.
+#define PIN_MODE_SWITCH 1          // D1, INPUT_PULLUP; low = device-side NTRIP
+
 // Status LEDs: three discrete SMD parts, one GPIO each, not an addressable
 // strip. Red, yellow and green - deliberately not blue. Blue and pure-green
 // dice have a forward voltage of about 3.0-3.2 V, and driven from a 3.3 V pin
@@ -153,6 +183,35 @@
 
 // Kept so a board with one LED still builds; it maps to the green.
 #define PIN_STATUS_LED PIN_LED_GREEN
+#define PROV_AP_PREFIX "RTK-Rover-"
+#define PROV_AP_PASSWORD "rtkrover"  // WPA2; an open portal is reachable by anyone nearby
+#define PROV_TIMEOUT_MS (10UL * 60 * 1000)   // radio off after this, used or not
+// Debug mode suspends that deadline entirely - a diagnosis must not be cut off
+// halfway - so it is the operator who ends the session, not the timer.
+#define PROV_NVS_NAMESPACE "rtkwifi"
+
+// The one name the portal's DNS answers. See notAGateway() in provisioning.cpp:
+// a phone on the rover's network must keep its mobile data, so nothing else
+// resolves to us.
+#define PROV_HOSTNAME "rtk.setup"
+
+
+// Device-side NTRIP (CRED_DEVICE mode). See ntrip.h for why a refusal is never
+// retried: a caster that sees an account hammering it bans the account.
+#define NTRIP_DEFAULT_PORT 2101
+#define NTRIP_CONNECT_TIMEOUT_MS 8000    // DNS + TCP over a phone hotspot
+#define NTRIP_RESPONSE_TIMEOUT_MS 10000
+#define NTRIP_GGA_INTERVAL_MS 10000      // a VRS needs to know where we are
+#define NTRIP_STALL_MS 30000             // connected but silent: reconnect
+#define NTRIP_WIFI_RETRY_MS 15000
+#define NTRIP_BACKOFF_MIN_MS 15000
+#define NTRIP_BACKOFF_MAX_MS 120000
+// Consecutive sessions that delivered (almost) nothing before the client stops
+// for good, until the settings or the mode change or the device restarts.
+#define NTRIP_MAX_FAILURES 5
+#define NTRIP_GOOD_SESSION_BYTES 1024
+#define NTRIP_BUFFER_BYTES 4096          // ~4 s of a busy MSM7 stream
+
 // ---------------------------------------------------------------------------
 // Battery
 // ---------------------------------------------------------------------------
