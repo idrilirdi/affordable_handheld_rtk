@@ -3,7 +3,7 @@
 // Minimal NMEA 0183 reader.
 //
 // The phone gets the receiver's sentences untouched; this parse is for the
-// device's own use - the LEDs, the synthesized GST and the
+// device's own use - the LEDs, point recording, the synthesized GST and the
 // diagnostics.
 //
 // Decoded: GGA (position, fix quality, satellites), ZDA/RMC (UTC date and

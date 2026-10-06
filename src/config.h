@@ -181,6 +181,31 @@
 #define FLOAT_STEADY_SCATTER_M 0.5f
 #define FLOAT_SCATTER_MIN_SAMPLES 10
 
+// Point recording (see points.h): a momentary push button from D8 to GND,
+// reachable through the enclosure. D8 is no strapping pin, so holding it while
+// power comes on cannot change how the chip boots.
+#define PIN_MARK_BUTTON 19         // D8, INPUT_PULLUP; low = pressed
+#define MARK_DEBOUNCE_MS 30
+#define MARK_REPEAT_MS 1500        // presses closer together count once
+#define POINTS_FILE "/points.csv"
+// A press starts an occupation: settle, then average and log (see points.h).
+// For the averaged position alone a short occupation is plenty once fixed;
+// the length matters for post-processing, where a minute of dual-frequency
+// data on a short baseline is about the least that resolves reliably.
+#define POINT_SETTLE_MS 10000
+#define POINT_OCCUPY_MS 60000
+// Log the receiver's raw observations during an occupation, for PPK.
+#define POINTS_LOG_RAW 1
+// What one occupation's raw log may take: MSM4 for four constellations on two
+// bands runs at roughly 1-2 kB/s. Below this much free space the point is
+// still taken, just without its raw log.
+#define POINTS_RAW_RESERVE_BYTES ((POINT_SETTLE_MS + POINT_OCCUPY_MS) / 1000 * 2048)
+// How stale "the receiver is talking" may be when a recording starts. The
+// receiver reports at 1 Hz, so this tolerates one late epoch and nothing more.
+#define POINTS_MAX_AGE_MS 2500
+// Refuse a point rather than fill the file system to the last block.
+#define POINTS_MIN_FREE_BYTES 8192
+
 // Kept so a board with one LED still builds; it maps to the green.
 #define PIN_STATUS_LED PIN_LED_GREEN
 #define PROV_AP_PREFIX "RTK-Rover-"

@@ -18,3 +18,7 @@ bool gnssAnswering();
 // run the whole setup again the moment it does, so reseating a loose wire
 // fixes everything without a restart. Does nothing once it has answered.
 void gnssInitTask(HardwareSerial &ser);
+
+// Raw observations and ephemerides as RTCM3 on the same UART, for recording
+// a point that can be post-processed. Off at boot; see points.h.
+void gnssSetRawOutput(HardwareSerial &ser, bool on);

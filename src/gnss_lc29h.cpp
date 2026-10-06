@@ -62,6 +62,10 @@ static const char *const kCommands[] = {
     "PQTMCFGMSGRATE,W,VTG,0",
     "PQTMCFGMSGRATE,W,GST,1",
     "PQTMCFGMSGRATE,W,PQTMEPE,1,2",
+    // Raw observations off. They are only wanted while a point is recorded,
+    // and a reset in the middle of one must not leave them streaming.
+    "PAIR432,-1",
+    "PAIR436,0",
 };
 
 static bool answering = false;
@@ -160,6 +164,18 @@ void gnssInit(HardwareSerial &ser) {
 
 bool gnssAnswering() { return answering; }
 
+// RTCM3 out of the receiver: MSM4 observations (pseudorange, carrier phase,
+// C/N0 - all that post-processing needs, at about half the size of MSM7) and
+// the broadcast ephemerides. Quectel documents these commands for the (BS)
+// variant; that the (DA) honors them in rover mode is still to be confirmed
+// on hardware. Each command answers within the
+// window, and the bytes read while waiting are lost to the parser: a second of
+// NMEA at the start and end of a recording, never in the middle.
+void gnssSetRawOutput(HardwareSerial &ser, bool on) {
+  sendCmd(ser, on ? "PAIR432,0" : "PAIR432,-1", GNSS_CMD_WAIT_MS);
+  sendCmd(ser, on ? "PAIR436,1" : "PAIR436,0", GNSS_CMD_WAIT_MS);
+}
+
 void gnssInitTask(HardwareSerial &ser) {
   static uint32_t lastProbe = 0;
   if (answering || millis() - lastProbe < GNSS_PROBE_MS) return;
@@ -175,4 +191,5 @@ void gnssInitTask(HardwareSerial &ser) {
 void gnssInit(HardwareSerial &) {}
 bool gnssAnswering() { return true; }
 void gnssInitTask(HardwareSerial &) {}
+void gnssSetRawOutput(HardwareSerial &, bool) {}
 #endif

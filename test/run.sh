@@ -20,4 +20,8 @@ g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/skyview_test skyview_test.cpp .
 g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/status_led_test status_led_test.cpp ../src/status_led.cpp ../src/scatter.cpp ../src/nmea.cpp ../src/skyview.cpp ../src/textbuf.cpp
 /tmp/status_led_test
 
+g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/points_test points_test.cpp ../src/points_format.cpp ../src/nmea.cpp ../src/skyview.cpp ../src/textbuf.cpp
+/tmp/points_test
 
+g++ -std=c++17 -Wall -Wextra -Werror -O1 -o /tmp/uplink_split_test uplink_split_test.cpp ../src/uplink_split.cpp
+/tmp/uplink_split_test

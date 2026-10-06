@@ -21,6 +21,7 @@
 #include "gnss_lc29h.h"
 #include "hotspots.h"
 #include "ntrip.h"
+#include "points.h"
 #include "rtcm.h"
 
 static DNSServer dns;
@@ -328,10 +329,136 @@ static void handleDebugToggle() {
   handleRoot();
 }
 
+// Recorded points: the same actions as the button, and the way to get them
+// off the device. First on the page, because after setup it is what the page
+// is opened for.
+static void sendChunk(const char *data, size_t len) { web.sendContent(data, len); }
+
+static void rawRow(const char *name, size_t bytes, void *ctx) {
+  String &s = *static_cast<String *>(ctx);
+  s += String("<br><a style='color:#8ab4f8' href='/raw?f=") + name + "' download>" + name +
+       "</a> " + String((unsigned)((bytes + 1023) / 1024)) + " kB";
+}
+
+static String pointsBlock() {
+  String s = "<div style='background:#1c1c1c;border:1px solid #333;border-radius:8px;"
+             "padding:12px;margin:12px 0;font-size:.9rem'><b>Points</b> - " +
+             String(pointsCount()) + " recorded";
+  if (pointsLastOutcome()[0]) s += "<br><b>" + esc(pointsLastOutcome()) + "</b>";
+  else if (pointsLast()[0]) s += "<br>last: <code>" + esc(pointsLast()) + "</code>";
+
+  const PointPhase ph = pointsPhase();
+  if (ph != PointPhase::Idle) {
+    // Reloads itself while the recording runs - no script needed for that.
+    const unsigned left = (pointsPhaseLeftMs() + 999) / 1000;
+    s += "<meta http-equiv=refresh content=2><p style='color:#e8a33d'><b>" +
+         String(pointsCurrentName()) + "</b> ";
+    if (ph == PointPhase::Settling)
+      s += "settling - hold the pole still, recording starts in " + String(left) + " s";
+    else
+      s += "recording - " + String(pointsCurrentSamples()) + " epochs, " + String(left) +
+           " s left";
+    s += "</p>";
+    if (ph == PointPhase::Recording)
+      s += "<form method=POST action=/pfinish><button>Finish now</button></form>";
+    s += "<form method=POST action=/pcancel><button style='background:#444'>Cancel"
+         "</button></form>";
+  } else if (provisioningExclusive()) {
+    // While the portal has the device to itself nothing is surveying, so there
+    // is no position to record; say so instead of a button that can only fail.
+    s += "<br><span style='color:#e8a33d'>Switch Debug on to record from here - the "
+         "rover is not surveying while setup has the device.</span>";
+  } else {
+    s += "<form method=POST action=/mark><button>Record point (" +
+         String(POINT_SETTLE_MS / 1000) + " s settle, " + String(POINT_OCCUPY_MS / 1000) +
+         " s recording)</button></form>";
+  }
+
+  if (pointsCount()) {
+    s += "<br>download: ";
+    const PointsFormat fmts[] = {PointsFormat::Csv, PointsFormat::GeoJson,
+                                 PointsFormat::Kml, PointsFormat::Gpx};
+    for (PointsFormat f : fmts) {
+      const char *name = pointsFileName(f);
+      s += String("<a style='color:#8ab4f8;margin-right:12px' href='/") + name +
+           "' download>" + strchr(name, '.') + "</a>";
+    }
+  }
+  String raws;
+  pointsRawList(rawRow, &raws);
+  if (raws.length()) s += "<br><br>raw logs, for post-processing (RTCM3):" + raws;
+  if ((pointsCount() || raws.length()) && ph == PointPhase::Idle)
+    s += "<form method=POST action=/pclear><button style='background:#444'>Delete all "
+         "points and raw logs</button></form>";
+  return s + "</div>";
+}
+
+// Answered with a redirect, unlike the setup forms: reloading a page that was
+// the reply to a POST sends the POST again, and here that is a second point.
+// The portal is opened from a real browser now - it never pops up by itself -
+// so the redirect is followed.
+static void backToRoot() {
+  web.sendHeader("Location", "/");
+  web.send(303, "text/plain", "");
+}
+
+static void handleMark() {
+  pointsStart();
+  backToRoot();
+}
+
+static void handlePointsFinish() {
+  pointsFinish();
+  backToRoot();
+}
+
+static void handlePointsCancel() {
+  pointsCancel();
+  backToRoot();
+}
+
+static void handleRaw() {
+  const String f = web.arg("f");
+  if (!pointsRawSend(f.c_str(), nullptr)) {
+    web.send(404, "text/plain", "no such raw log");
+    return;
+  }
+  web.sendHeader("Content-Disposition", "attachment; filename=" + f);
+  web.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  web.send(200, "application/octet-stream", "");
+  pointsRawSend(f.c_str(), sendChunk);
+  web.sendContent("");
+}
+
+// Two steps without relying on script: a captive-portal browser may run none,
+// and one stray tap must not erase a day's work.
+static void handlePointsClear() {
+  if (web.arg("sure") == "yes") {
+    status = pointsClear() ? "All points and raw logs deleted." : "Could not delete the points.";
+    backToRoot();
+    return;
+  }
+  web.send(200, "text/html",
+           page("<p>Delete all " + String(pointsCount()) + " points? This cannot be "
+                "undone - download them first.</p><form method=POST action=/pclear>"
+                "<input type=hidden name=sure value=yes><button style='background:#c0392b'>"
+                "Yes, delete them all, raw logs too</button></form><p><a style='color:#8ab4f8' "
+                "href='/'>Cancel</a></p>"));
+}
+
+static void sendPoints(PointsFormat f) {
+  web.sendHeader("Content-Disposition", String("attachment; filename=") + pointsFileName(f));
+  web.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  web.send(200, pointsMimeType(f), "");
+  pointsExport(f, sendChunk);
+  web.sendContent("");  // the empty chunk that ends a chunked reply
+}
+
 static void handleRoot() {
   String body = statusBlock();
   if (status.length()) body += "<p style='color:#7bd88f'>" + status + "</p>";
   status = "";
+  body += pointsBlock();
   // The scan result, as <option>s, shared by both hotspot forms below.
   String opts;
   int n = WiFi.scanComplete();
@@ -569,6 +696,15 @@ bool provisioningBegin() {
   web.on("/hsadd", HTTP_POST, handleHotspotAdd);
   web.on("/hsdel", HTTP_POST, handleHotspotDel);
   web.on("/d.txt", handleDebugText);
+  web.on("/mark", HTTP_POST, handleMark);
+  web.on("/pclear", HTTP_POST, handlePointsClear);
+  web.on("/pfinish", HTTP_POST, handlePointsFinish);
+  web.on("/pcancel", HTTP_POST, handlePointsCancel);
+  web.on("/raw", handleRaw);
+  web.on("/points.csv", [] { sendPoints(PointsFormat::Csv); });
+  web.on("/points.geojson", [] { sendPoints(PointsFormat::GeoJson); });
+  web.on("/points.kml", [] { sendPoints(PointsFormat::Kml); });
+  web.on("/points.gpx", [] { sendPoints(PointsFormat::Gpx); });
   web.onNotFound(handleRoot);        // whatever the phone probes for, it gets the portal
   web.begin();
 

@@ -24,3 +24,10 @@ row, with `ok` set to 0: gaps are data, they show where the link died.
 
 Proves the USB-to-receiver bridge is transparent in both directions before it
 is trusted with a receiver firmware image.
+
+## Raw logs to RINEX
+
+    tools/rtcm2rinex.sh P0001_20261006T090507.rtcm3
+
+Converts a point's raw RTCM3 log to RINEX `.obs`/`.nav` for post-processing,
+with RTKLIB's `convbin`. See the README's "Raw logs and PPK".

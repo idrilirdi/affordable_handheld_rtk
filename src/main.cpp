@@ -1,7 +1,7 @@
 // RTK GNSS rover -> phone, over Bluetooth LE.
 //
 //   receiver TX --> UART --> NMEA --> Nordic UART ---> phone
-//                        \-> parse: LEDs, diagnostics
+//                        \-> parse: LEDs, points, diagnostics
 //   receiver RX <-- UART <----------- corrections <--- phone
 //
 // The phone runs a GNSS app that reads an NMEA sentence stream over Nordic
@@ -25,6 +25,8 @@
 #include "provisioning.h"
 #include "status_led.h"
 #include "ntrip.h"
+#include "points.h"
+#include "uplink_split.h"
 #include "rtcm.h"
 #include "scatter.h"
 
@@ -34,6 +36,7 @@ static NmeaParser parser;
 // different solutions into one number.
 static Scatter floatScatter;
 
+static UplinkSplit uplinkSplit;
 static uint32_t bytesFromGnss = 0;
 static uint32_t bytesToGnss = 0;
 static uint32_t epochs = 0;
@@ -79,7 +82,9 @@ static void ledInit() {
 // rover surveying alongside it - the bench build, debug mode - the fix is what
 // matters, and a portal pattern on top hid it entirely.
 static void statusLedTask() {
-  const Lamps l = statusPattern(
+  Lamps l;
+  // The answer to a button press outranks the status for its second.
+  if (!pointsLamps(&l)) l = statusPattern(
       statusOf(parser.fix(), parser.fix().diffAge, batteryPercent(),
                provisioningExclusive(), floatScatter.rms(FLOAT_SCATTER_MIN_SAMPLES)),
       millis());
@@ -109,9 +114,15 @@ static bool pumpUplink() {
   if (limit > sizeof(buf)) limit = sizeof(buf);
   if (limit == 0) limit = sizeof(buf);
 
-  while (GnssSerial.available() && n < limit) buf[n++] = (uint8_t)GnssSerial.read();
-  if (n == 0) return false;
-  bytesFromGnss += n;
+  static uint8_t in[BRIDGE_CHUNK];
+  size_t got = 0;
+  while (GnssSerial.available() && got < limit) in[got++] = (uint8_t)GnssSerial.read();
+  if (got == 0) return false;
+  bytesFromGnss += got;
+  // RTCM out of the receiver - only while a point is being recorded - goes to
+  // the point log; everything below sees the NMEA alone.
+  n = uplinkSplit.feed(in, got, buf, pointsOnRtcm);
+  if (n == 0) return true;
 
   // Parse unconditionally, even with nobody listening: the parser must stay in
   // sync with the sentence stream, and a client that subscribes mid-burst then
@@ -128,6 +139,7 @@ static bool pumpUplink() {
     const GnssFix &f = parser.fix();
     if (f.havePos && f.type == PosType::Float) floatScatter.add(f.lat, f.lon);
     else floatScatter.clear();
+    pointsOnEpoch(f);
   }
   // Raw mirror is a straight passthrough - it must not be reframed, so it goes
   // out in whatever chunks the UART delivered.
@@ -305,6 +317,7 @@ void setup() {
   gnssInit(GnssSerial);
 
   batteryBegin();
+  pointsBegin();
   bleBegin();
   ntripBegin();
 
@@ -335,6 +348,8 @@ void loop() {
   if (provisioningActive()) {
     provisioningTask();
     if (provisioningExclusive()) {
+      // Still polled, so a press gets its red "not saved" rather than nothing.
+      pointsTask();
       ledTask();
       statusLedTask();
       return;
@@ -354,6 +369,12 @@ void loop() {
 
   lap(0, "portal");
   gnssInitTask(GnssSerial);
+  // Raw observations only while a point is being recorded.
+  static bool rawOn = false;
+  if (pointsWantRaw() != rawOn) {
+    rawOn = pointsWantRaw();
+    gnssSetRawOutput(GnssSerial, rawOn);
+  }
   bool busy = pumpUplink();
   lap(1, "uplink");
   busy |= pumpDownlink();
@@ -369,6 +390,8 @@ void loop() {
   printStats();
 #endif
   lap(6, "stats");
+  pointsTask();
+  lap(7, "points");
 
   // Yield when idle: a tight loop() starves the idle task on this core and
   // eventually trips the task watchdog.
