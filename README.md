@@ -52,8 +52,9 @@ one too.
 *Early testing on the balcony. On the receiver's older Quectel firmware it never reached an RTK fix; updating to Quectel's newest release fixed that. The cast-iron pan is a ground plane, to give it the best possible conditions, and the box holds the device upright.*
 
 Walking a circuit around a building with the antenna on a pole, with network
-RTK (VRS) corrections through the phone: **92 % of epochs RTK fixed**, at 4 mm
-reported accuracy. The only loss of fix was a 19 s gap in the corrections
+RTK (VRS) corrections through the phone: **92 % of epochs RTK fixed**, with the
+receiver estimating its own accuracy at 4 mm - an estimate, not a measurement
+against ground truth. The only loss of fix was a 19 s gap in the corrections
 themselves - a mobile dead spot behind the building. The receiver held its fix
 on the aging corrections for most of that gap and was fixed again 12 s after
 they resumed.
@@ -66,6 +67,11 @@ whose age climbs to 19 s in the bottom-right panel.*
 
 In later tests in open fields, the device held in one hand kept its fix while
 walking between points.
+
+Further field tests are under way: longer runs in open fields, near buildings
+and under trees, and repeated occupations of known survey markers, so that the
+accuracy is measured against ground truth rather than taken from the
+receiver's own estimate.
 
 What does keep it from fixing is the sky, not the hardware: low down beside a
 building it can sit in float for an hour. Judge a site, or an antenna, by the
@@ -194,6 +200,16 @@ PlatformIO for the device and by Bazel for the host tests.
     BOM.md                  parts and cost per unit
 
 ## Design notes
+
+**Plain interfaces, fixed buffers.** The code is deliberately C-like: POD
+structs, fixed-size buffers and function-pointer callbacks rather than
+`std::function` or containers. The portable modules in `lib/` then depend on
+neither Arduino nor the STL and build unchanged on the host for the tests, and
+the data path - UART, NMEA parsing, the BLE stream, corrections - allocates
+nothing per epoch. The heap is used where that buys simplicity and nothing is
+time-critical: at setup, when a point starts or ends, when an NTRIP session
+connects, and in the WiFi portal, which builds its pages with Arduino
+`String`.
 
 **Accuracy on the LC29H.** The protocol specification states that "GST is not
 supported on LC29H (BA, CA, DA, EA)", so the usual per-axis accuracy sentence
