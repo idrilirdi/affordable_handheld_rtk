@@ -1,17 +1,13 @@
 // Host-native tests for separating RTCM3 frames from the NMEA stream:
-//   bazel test //test:all
+//   bazel test //test:uplink_split_test
 #include "uplink_split.h"
+
+#include <catch2/catch_test_macros.hpp>
 
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
-
-static int fails = 0;
-static void check(bool ok, const char *what) {
-  printf("  %-46s %s\n", what, ok ? "ok" : "FAIL");
-  if (!ok) fails++;
-}
 
 static std::vector<std::string> frames;
 static void onFrame(const uint8_t *d, size_t n) { frames.emplace_back((const char *)d, n); }
@@ -48,8 +44,7 @@ static std::string run(UplinkSplit &s, const std::string &in, size_t step) {
   return text;
 }
 
-int main() {
-  printf("Uplink split\n");
+TEST_CASE("Uplink split", "[uplink_split]") {
   const std::string gga = "$GNGGA,120000.00,4807.0,N,01134.5,E,4,24,0.6,519.2,M,47.5,M,1.0,0401*00\r\n";
   const std::string zda = "$GNZDA,120000.00,06,10,2026,00,00*00\r\n";
   // A payload that contains '$', '\n' and 0xD3: binary must not be read as text.
@@ -59,11 +54,14 @@ int main() {
     frames.clear();
     UplinkSplit s;
     const std::string text = run(s, gga + big + zda + small + gga, step);
-    char what[64];
-    snprintf(what, sizeof(what), "slices of %zu: text intact", step);
-    check(text == gga + zda + gga, what);
-    snprintf(what, sizeof(what), "slices of %zu: frames intact", step);
-    check(frames.size() == 2 && frames[0] == big && frames[1] == small, what);
+    {
+      INFO("slices of " << step << ": text intact");
+      CHECK(text == gga + zda + gga);
+    }
+    {
+      INFO("slices of " << step << ": frames intact");
+      CHECK((frames.size() == 2 && frames[0] == big && frames[1] == small));
+    }
   }
 
   frames.clear();
@@ -71,15 +69,15 @@ int main() {
   std::string bad = frame(30, 1);
   bad[10] ^= 0x40;
   const std::string text = run(s, gga + bad + zda, 16);
-  check(frames.empty() && s.framesBad() == 1, "bad CRC dropped");
-  check(text == gga + zda, "text after a bad frame survives");
+  // bad CRC dropped
+  CHECK((frames.empty() && s.framesBad() == 1));
+  // text after a bad frame survives
+  CHECK(text == gga + zda);
 
   frames.clear();
   UplinkSplit r;
   std::string stray = "\xD3\xFF";
   const std::string t2 = run(r, stray + gga, 5);
-  check(frames.empty() && t2 == gga.substr(1), "stray 0xD3 costs one byte");
-
-  printf(fails ? "\n%d FAILED\n" : "\nall passed (%d failures)\n", fails);
-  return fails ? 1 : 0;
+  // stray 0xD3 costs one byte
+  CHECK((frames.empty() && t2 == gga.substr(1)));
 }

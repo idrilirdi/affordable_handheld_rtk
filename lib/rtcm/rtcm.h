@@ -18,6 +18,9 @@
 
 void rtcmFeed(const uint8_t *data, size_t len);
 
+// Forgets every frame, type and base position seen, and any partial frame.
+void rtcmReset();
+
 uint32_t rtcmFramesOk();
 uint32_t rtcmFramesBad();
 

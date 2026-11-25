@@ -1,10 +1,16 @@
 // Host-native RTCM3 tests. rtcm.cpp has no Arduino dependencies on purpose.
+//   bazel test //test:rtcm_test
 //
 // The MSM masks are read at fixed bit offsets into the payload, so an
 // off-by-one in the header arithmetic would silently report the wrong
 // satellites and the wrong signals - and the whole point of that decode is to
 // answer "does this stream carry the band the rover needs", which is not a
 // question you want answered wrongly.
+//
+// rtcm.cpp keeps global counters and per-type state, so every test case
+// starts with rtcmReset() and runs in any order.
+
+#include <catch2/catch_test_macros.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -12,13 +18,6 @@
 #include <vector>
 
 #include "rtcm.h"
-
-static int failures = 0;
-
-static void check(const char *what, bool ok) {
-  printf("  %-46s %s\n", what, ok ? "ok" : "FAIL");
-  if (!ok) failures++;
-}
 
 // Big-endian bit writer, matching how RTCM defines every field.
 struct Bits {
@@ -79,45 +78,56 @@ static std::vector<uint8_t> msmFrame(uint16_t type, const std::vector<int> &sats
   return f;
 }
 
-int main() {
-  char buf[512];
+static char buf[512];
 
-  printf("RTCM frame check\n");
+TEST_CASE("RTCM frame check", "[rtcm]") {
+  rtcmReset();
   auto f = msmFrame(1077, {1, 5, 9, 30}, {2, 17, 22});
   rtcmFeed(f.data(), f.size());
-  check("valid frame accepted", rtcmFramesOk() == 1 && rtcmFramesBad() == 0);
+  // valid frame accepted
+  CHECK((rtcmFramesOk() == 1 && rtcmFramesBad() == 0));
 
   rtcmSummary(buf, sizeof(buf));
-  check("message type decoded", strstr(buf, "1077") != nullptr);
-  check("satellite count from the 64-bit mask", strstr(buf, "sats 4") != nullptr);
-  check("signal IDs from the 32-bit mask", strstr(buf, "sig 2 17 22") != nullptr);
+  // message type decoded
+  CHECK(strstr(buf, "1077") != nullptr);
+  // satellite count from the 64-bit mask
+  CHECK(strstr(buf, "sats 4") != nullptr);
+  // signal IDs from the 32-bit mask
+  CHECK(strstr(buf, "sig 2 17 22") != nullptr);
+}
 
-  printf("L5 detection\n");
+TEST_CASE("L5 detection", "[rtcm]") {
+  rtcmReset();
   auto l12 = msmFrame(1087, {2, 3}, {2, 10});     // L1 C/A + L2 W: no L5
   rtcmFeed(l12.data(), l12.size());
   rtcmSummary(buf, sizeof(buf));
-  check("an L1/L2 base shows no ID 22-24", strstr(buf, "1087 x1 sats 2 sig 2 10") != nullptr);
+  // an L1/L2 base shows no ID 22-24
+  CHECK(strstr(buf, "1087 x1 sats 2 sig 2 10") != nullptr);
+}
 
-  printf("corruption\n");
+TEST_CASE("corruption", "[rtcm]") {
+  rtcmReset();
   auto bad = msmFrame(1097, {1}, {2});
   bad[8] ^= 0xFF;                                  // flip a payload byte
   uint32_t okBefore = rtcmFramesOk();
   rtcmFeed(bad.data(), bad.size());
-  check("CRC failure rejected", rtcmFramesOk() == okBefore && rtcmFramesBad() == 1);
+  // CRC failure rejected
+  CHECK((rtcmFramesOk() == okBefore && rtcmFramesBad() == 1));
+}
 
-  printf("framing\n");
+TEST_CASE("framing", "[rtcm]") {
+  rtcmReset();
   auto a = msmFrame(1005, {}, {});
   uint32_t ok2 = rtcmFramesOk();
   for (size_t i = 0; i < a.size(); ++i) rtcmFeed(&a[i], 1);   // one byte at a time
-  check("frame reassembled across chunks", rtcmFramesOk() == ok2 + 1);
+  // frame reassembled across chunks
+  CHECK(rtcmFramesOk() == ok2 + 1);
 
   uint8_t junk[] = {0x00, 0xFF, 0x12, 0xD3};       // noise, then a false start
   rtcmFeed(junk, sizeof(junk));
   auto b = msmFrame(1074, {7}, {2, 23});
   rtcmFeed(b.data(), b.size());
   rtcmSummary(buf, sizeof(buf));
-  check("resyncs after junk", strstr(buf, "1074 x1 sats 1 sig 2 23") != nullptr);
-
-  printf(failures ? "\n%d FAILED\n" : "\nall passed (%d failures)\n", failures);
-  return failures ? 1 : 0;
+  // resyncs after junk
+  CHECK(strstr(buf, "1074 x1 sats 1 sig 2 23") != nullptr);
 }

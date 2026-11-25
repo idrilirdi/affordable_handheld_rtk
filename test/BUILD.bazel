@@ -6,6 +6,7 @@ cc_test(
     srcs = ["nmea_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/nmea",
     ],
 )
@@ -15,6 +16,7 @@ cc_test(
     srcs = ["rtcm_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/rtcm",
     ],
 )
@@ -24,6 +26,7 @@ cc_test(
     srcs = ["diag_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/diag",
         "//lib/nmea",
         "//lib/rtcm",
@@ -35,6 +38,7 @@ cc_test(
     srcs = ["fieldstats_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/fieldstats",
     ],
 )
@@ -44,6 +48,7 @@ cc_test(
     srcs = ["skyview_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/nmea",
         "//lib/skyview",
     ],
@@ -54,6 +59,7 @@ cc_test(
     srcs = ["status_led_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/status_led",
         "//lib/scatter",
     ],
@@ -64,6 +70,7 @@ cc_test(
     srcs = ["points_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/points_format",
     ],
 )
@@ -73,6 +80,7 @@ cc_test(
     srcs = ["uplink_split_test.cpp"],
     copts = COPTS,
     deps = [
+        "@catch2//:catch2_main",
         "//lib/uplink_split",
     ],
 )

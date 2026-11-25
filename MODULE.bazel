@@ -1,3 +1,4 @@
 module(name = "affordable_handheld_rtk")
 
-bazel_dep(name = "rules_cc", version = "0.2.14")
+bazel_dep(name = "rules_cc", version = "0.2.28")
+bazel_dep(name = "catch2", version = "3.16.1", dev_dependency = True)

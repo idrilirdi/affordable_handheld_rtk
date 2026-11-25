@@ -4,6 +4,13 @@
 // survey - attaching resets the board and restarts the receiver's navigation
 // filter. So they are the only view into a running session, and a malformed
 // one would be discovered in a field with no way to look closer.
+//
+//   bazel test //test:diag_test
+//
+// rtcm.cpp keeps global counters and per-type state, so every test case
+// starts with rtcmReset() and runs in any order.
+
+#include <catch2/catch_test_macros.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -13,12 +20,6 @@
 #include "diag.h"
 #include "nmea.h"
 #include "rtcm.h"
-
-static int failures = 0;
-static void check(const char *what, bool ok) {
-  printf("  %-46s %s\n", what, ok ? "ok" : "FAIL");
-  if (!ok) failures++;
-}
 
 // Valid NMEA: '$', body, '*', two hex digits of XOR, CRLF, and at most the
 // 82 characters the standard allows.
@@ -97,48 +98,78 @@ static std::vector<uint8_t> msg1005(double x, double y, double z) {
   return frame(p);
 }
 
-int main() {
-  char s[128];
+// Shared by every test case: the output buffer and the fix being described.
+static char s[128];
+
+static GnssFix munichFix() {
   GnssFix fix;
   fix.lat = 48.1372000; fix.lon = 11.5755000; fix.altMsl = 520.0;
   fix.havePos = true; fix.diffAge = 1.0f; fix.baseId = 404;
+  return fix;
+}
 
-  printf("status sentence\n");
+TEST_CASE("status sentence", "[diag]") {
+  rtcmReset();
+  const GnssFix fix = munichFix();
   auto m = msm(1074, {1, 5, 9}, {2, 24});
   rtcmFeed(m.data(), m.size());
   size_t n = diagSentence(s, sizeof(s), 0, fix);
-  check("built", n > 0);
-  check("well formed NMEA", wellFormed(s));
-  check("carries the age of corrections", strstr(s, "PRTKA,1.0,404") != nullptr);
+  // built
+  CHECK(n > 0);
+  // well formed NMEA
+  CHECK(wellFormed(s));
+  // carries the age of corrections
+  CHECK(strstr(s, "PRTKA,1.0,404") != nullptr);
+}
 
-  printf("no corrections\n");
+TEST_CASE("no corrections", "[diag]") {
+  rtcmReset();
   GnssFix cold;
   cold.havePos = true;
   diagSentence(s, sizeof(s), 0, cold);
-  check("empty age field when none are applied", strstr(s, "PRTKA,,0,") != nullptr);
-  check("still well formed", wellFormed(s));
+  // empty age field when none are applied
+  CHECK(strstr(s, "PRTKA,,0,") != nullptr);
+  // still well formed
+  CHECK(wellFormed(s));
+}
 
-  printf("per-message detail\n");
-  n = diagSentence(s, sizeof(s), 1, fix);
-  check("built", n > 0);
-  check("well formed NMEA", wellFormed(s));
-  check("type, count, satellites and signals",
-        strstr(s, "PRTKM,1074,1,3,2,24") != nullptr);
-  check("cycle ends past the last type",
-        diagSentence(s, sizeof(s), 1 + rtcmTypeCount(), fix) == 0);
+TEST_CASE("per-message detail", "[diag]") {
+  rtcmReset();
+  const GnssFix fix = munichFix();
+  auto m = msm(1074, {1, 5, 9}, {2, 24});
+  rtcmFeed(m.data(), m.size());
+  size_t n = diagSentence(s, sizeof(s), 1, fix);
+  // built
+  CHECK(n > 0);
+  // well formed NMEA
+  CHECK(wellFormed(s));
+  // type, count, satellites and signals
+  CHECK(strstr(s, "PRTKM,1074,1,3,2,24") != nullptr);
+  // cycle ends past the last type
+  CHECK(diagSentence(s, sizeof(s), 1 + rtcmTypeCount(), fix) == 0);
+}
 
-  printf("baseline\n");
+TEST_CASE("baseline", "[diag]") {
+  rtcmReset();
+  const GnssFix fix = munichFix();
   // Munich in ECEF, rounded to the kilometer, near the fix above.
   auto b = msg1005(4178000.0, 856000.0, 4727000.0);
   rtcmFeed(b.data(), b.size());
   double la, lo, al;
-  check("1005 decoded", rtcmBasePosition(&la, &lo, &al));
-  check("plausible latitude", la > 47.0 && la < 49.5);
-  check("plausible longitude", lo > 10.0 && lo < 13.0);
+  // 1005 decoded
+  CHECK(rtcmBasePosition(&la, &lo, &al));
+  // plausible latitude
+  CHECK((la > 47.0 && la < 49.5));
+  // plausible longitude
+  CHECK((lo > 10.0 && lo < 13.0));
   diagSentence(s, sizeof(s), 0, fix);
-  check("baseline present and well formed", wellFormed(s) && strstr(s, "PRTKA,1.0,404,"));
+  // baseline present and well formed
+  CHECK((wellFormed(s) && strstr(s, "PRTKA,1.0,404,")));
+}
 
-  printf("width\n");
+TEST_CASE("width", "[diag]") {
+  rtcmReset();
+  const GnssFix fix = munichFix();
   auto wide = msm(1077, {1,2,3,4,5,6,7,8,9,10},
                   {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});
   rtcmFeed(wide.data(), wide.size());
@@ -147,8 +178,6 @@ int main() {
     if (!diagSentence(s, sizeof(s), i, fix)) break;
     if (!wellFormed(s)) allFit = false;
   }
-  check("every sentence stays inside the NMEA limit", allFit);
-
-  printf(failures ? "\n%d FAILED\n" : "\nall passed (%d failures)\n", failures);
-  return failures ? 1 : 0;
+  // every sentence stays inside the NMEA limit
+  CHECK(allFit);
 }

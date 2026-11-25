@@ -179,16 +179,25 @@ static void consume(uint8_t *f, size_t *have) {
   }
 }
 
-void rtcmFeed(const uint8_t *data, size_t len) {
-  // Longest RTCM3 frame is 1023 payload bytes plus six of framing, so this
-  // never has to grow and a frame can always be held whole.
-  static uint8_t f[1029];
-  static size_t have = 0;
+// Longest RTCM3 frame is 1023 payload bytes plus six of framing, so this
+// never has to grow and a frame can always be held whole.
+static uint8_t frameBuf[1029];
+static size_t frameHave = 0;
 
+void rtcmReset() {
+  frameHave = 0;
+  framesOk = framesBad = 0;
+  nTypes = 0;
+  untracked = 0;
+  haveBase = false;
+}
+
+void rtcmFeed(const uint8_t *data, size_t len) {
   for (size_t i = 0; i < len; ++i) {
-    if (have == sizeof(f)) resync(f, &have);  // unreachable: length is bounded
-    f[have++] = data[i];
-    consume(f, &have);
+    // unreachable: the frame length is bounded
+    if (frameHave == sizeof(frameBuf)) resync(frameBuf, &frameHave);
+    frameBuf[frameHave++] = data[i];
+    consume(frameBuf, &frameHave);
   }
 }
 
