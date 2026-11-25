@@ -224,15 +224,14 @@ polyfuse in the cell line. Bare boards, assembled by hand.
 
 ### Printed case
 
-Until then, the prototype's Waveshare LC29H board sits in a
-[community case from Printables](https://www.printables.com/model/1593114-case-for-lc29h-rtk-high-precision-positioning-gnss).
-
 A PETG or ASA shell that clips to a vest breast pocket or mounts on a pole,
 with the helix antenna on top and vertical for a clear view of the sky. The
 cell sits in a cradle inside, beside the charger. The power switch and mode
 switch are recessed so a strap cannot move them; the mark button and the three
 LEDs are on the face. USB-C gets an overhang against rain. STL files and the
 parametric source go here once the PCB fixes the internal layout.
+Until then, the prototype's Waveshare LC29H board sits in a
+[community case from Printables](https://www.printables.com/model/1593114-case-for-lc29h-rtk-high-precision-positioning-gnss).
 
 ## How it was built
 
