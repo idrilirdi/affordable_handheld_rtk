@@ -18,6 +18,11 @@ name, keeps the laptop awake, and runs `logpanel.py`, which polls the panel
 once a second and writes one CSV row per poll. A failed poll still writes a
 row, with `ok` set to 0: gaps are data, they show where the link died.
 
+`plotwalk.py --anonymize` rotates the track onto its long axis and drops the
+compass directions before plotting, so a published plot cannot be matched to a
+building footprint. `--powerloss SECONDS` cuts the run off where the device
+lost power or its antenna.
+
 ## Bridge check
 
     tools/bridgetest.py /dev/ttyACM0

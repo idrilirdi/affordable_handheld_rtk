@@ -8,8 +8,8 @@
 #include <cstring>
 #include <string>
 
-#include "../src/nmea.h"
-#include "../src/skyview.h"
+#include "nmea.h"
+#include "skyview.h"
 
 static int failures = 0;
 static void check(const char *what, bool ok) {

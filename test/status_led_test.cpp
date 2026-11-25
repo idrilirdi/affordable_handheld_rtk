@@ -8,8 +8,8 @@
 #include <cstring>
 #include <string>
 
-#include "../src/status_led.h"
-#include "../src/scatter.h"
+#include "status_led.h"
+#include "scatter.h"
 
 static int failures = 0;
 static void check(const char *what, bool ok) {

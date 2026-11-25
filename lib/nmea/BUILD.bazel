@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//:copts.bzl", "COPTS")
+
+cc_library(
+    name = "nmea",
+    srcs = ["nmea.cpp"],
+    hdrs = ["nmea.h"],
+    copts = COPTS,
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//lib/skyview",
+    ],
+)

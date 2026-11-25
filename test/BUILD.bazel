@@ -1,0 +1,78 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("//:copts.bzl", "COPTS")
+
+cc_test(
+    name = "nmea_test",
+    srcs = ["nmea_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/nmea",
+    ],
+)
+
+cc_test(
+    name = "rtcm_test",
+    srcs = ["rtcm_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/rtcm",
+    ],
+)
+
+cc_test(
+    name = "diag_test",
+    srcs = ["diag_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/diag",
+        "//lib/nmea",
+        "//lib/rtcm",
+    ],
+)
+
+cc_test(
+    name = "fieldstats_test",
+    srcs = ["fieldstats_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/fieldstats",
+    ],
+)
+
+cc_test(
+    name = "skyview_test",
+    srcs = ["skyview_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/nmea",
+        "//lib/skyview",
+    ],
+)
+
+cc_test(
+    name = "status_led_test",
+    srcs = ["status_led_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/status_led",
+        "//lib/scatter",
+    ],
+)
+
+cc_test(
+    name = "points_test",
+    srcs = ["points_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/points_format",
+    ],
+)
+
+cc_test(
+    name = "uplink_split_test",
+    srcs = ["uplink_split_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//lib/uplink_split",
+    ],
+)

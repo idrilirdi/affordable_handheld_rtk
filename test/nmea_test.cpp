@@ -1,6 +1,6 @@
 // Host-native tests for the NMEA parser. No hardware, no framework:
-//   ./test/run.sh
-#include "../src/nmea.h"
+//   bazel test //test:all
+#include "nmea.h"
 
 #include <algorithm>
 #include <cmath>

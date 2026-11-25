@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# Header only: the firmware's pins, timings and behavior switches. The portable
+# modules that read a threshold from it see the same values on the host.
+cc_library(
+    name = "config",
+    hdrs = ["config.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)

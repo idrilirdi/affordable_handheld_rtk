@@ -1,6 +1,6 @@
 // Host-native tests for separating RTCM3 frames from the NMEA stream:
-//   ./test/run.sh
-#include "../src/uplink_split.h"
+//   bazel test //test:all
+#include "uplink_split.h"
 
 #include <cstdio>
 #include <cstring>

@@ -32,6 +32,10 @@ def main():
     ap.add_argument("--out", default="walk.png")
     ap.add_argument("--powerloss", type=float, default=None,
                     help="seconds after which the board lost power; excluded")
+    ap.add_argument("--anonymize", action="store_true",
+                    help="rotate the track onto its long axis and drop compass "
+                         "directions, so a published plot cannot be matched to "
+                         "a building footprint")
     args = ap.parse_args()
 
     rows = [r for r in csv.DictReader(open(args.csvfile)) if r["ok"] == "1"]
@@ -49,6 +53,18 @@ def main():
     for r in live:
         r["_e"] = (num(r, "lon") - lon0) * kx
         r["_n"] = (num(r, "lat") - lat0) * 111320.0
+    xlabel, ylabel = "east (m)", "north (m)"
+    if args.anonymize:
+        # Principal axis of the track, from the second moments.
+        see = sum(r["_e"] ** 2 for r in live)
+        snn = sum(r["_n"] ** 2 for r in live)
+        sen = sum(r["_e"] * r["_n"] for r in live)
+        th = 0.5 * math.atan2(2 * sen, see - snn)
+        c, s_ = math.cos(-th), math.sin(-th)
+        for r in live:
+            e, n = r["_e"], r["_n"]
+            r["_e"], r["_n"] = e * c - n * s_, e * s_ + n * c
+        xlabel, ylabel = "x (m)", "y (m)"
 
     fig, ax = plt.subplots(2, 2, figsize=(14, 11))
     fig.suptitle("RTK walked circuit - fix quality against sky quality", fontsize=13)
@@ -62,7 +78,7 @@ def main():
     a.plot([r["_e"] for r in live], [r["_n"] for r in live], "-", lw=0.4, c="#bbb", zorder=0)
     a.scatter([live[0]["_e"]], [live[0]["_n"]], marker="*", s=220, c="k", zorder=5, label="start")
     a.set_aspect("equal"); a.grid(alpha=.3); a.legend(fontsize=8)
-    a.set_title("track by fix state"); a.set_xlabel("east (m)"); a.set_ylabel("north (m)")
+    a.set_title("track by fix state"); a.set_xlabel(xlabel); a.set_ylabel(ylabel)
 
     # The same track, colored by what the antenna could hear.
     a = ax[0][1]
@@ -71,7 +87,7 @@ def main():
                    cmap="viridis")
     fig.colorbar(sc, ax=a, label="median C/N0 above 30 deg (dB-Hz)")
     a.set_aspect("equal"); a.grid(alpha=.3)
-    a.set_title("track by sky quality"); a.set_xlabel("east (m)"); a.set_ylabel("north (m)")
+    a.set_title("track by sky quality"); a.set_xlabel(xlabel); a.set_ylabel(ylabel)
 
     # Signal and state through time, so cause and effect line up.
     a = ax[1][0]

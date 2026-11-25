@@ -1,6 +1,6 @@
 // Host-native tests for the point record and its export formats:
-//   ./test/run.sh
-#include "../src/points_format.h"
+//   bazel test //test:all
+#include "points_format.h"
 
 #include <cmath>
 #include <cstdio>

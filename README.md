@@ -5,4 +5,4 @@ ESP32-C6, streaming NMEA to a phone over Bluetooth LE, with RTCM3 corrections
 coming back the same way.
 
     pio run -e xiao_esp32c6 -t upload
-    ./test/run.sh
+    bazel test //...

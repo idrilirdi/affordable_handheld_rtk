@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//:copts.bzl", "COPTS")
+
+cc_library(
+    name = "points_format",
+    srcs = ["points_format.cpp"],
+    hdrs = ["points_format.h"],
+    copts = COPTS,
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//lib/nmea",
+        "//lib/textbuf",
+    ],
+)

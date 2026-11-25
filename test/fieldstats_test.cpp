@@ -9,7 +9,7 @@
 #include <cstring>
 #include <string>
 
-#include "../src/fieldstats.h"
+#include "fieldstats.h"
 
 static int failures = 0;
 static void check(const char *what, bool ok) {

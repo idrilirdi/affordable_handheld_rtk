@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "../src/diag.h"
-#include "../src/nmea.h"
-#include "../src/rtcm.h"
+#include "diag.h"
+#include "nmea.h"
+#include "rtcm.h"
 
 static int failures = 0;
 static void check(const char *what, bool ok) {

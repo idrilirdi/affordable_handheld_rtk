@@ -1,0 +1,11 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//:copts.bzl", "COPTS")
+
+cc_library(
+    name = "textbuf",
+    srcs = ["textbuf.cpp"],
+    hdrs = ["textbuf.h"],
+    copts = COPTS,
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)

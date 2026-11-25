@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "../src/rtcm.h"
+#include "rtcm.h"
 
 static int failures = 0;
 
