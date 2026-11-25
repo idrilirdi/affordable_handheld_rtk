@@ -4,7 +4,8 @@
 
 ![The hand-wired prototype: helix antenna, the GNSS board in a blue printed case, the cell in a green one, and the XIAO on a breadboard - resting on a calico cat](docs/img/prototype.jpg)
 
-*The current hand-wired prototype, cat for scale.*
+*The current hand-wired prototype, cat for scale. The prototype uses a Waveshare
+LC29H board, in [this case from Printables](https://www.printables.com/model/1593114-case-for-lc29h-rtk-high-precision-positioning-gnss) (the blue one).*
 
 > **Work in progress.** The device works in the field, but it is still a
 > hand-wired prototype: the carrier PCB and the printed case are being designed
@@ -222,6 +223,9 @@ a P-FET that switches the receiver's supply (for the USB bridge) and a
 polyfuse in the cell line. Bare boards, assembled by hand.
 
 ### Printed case
+
+Until then, the prototype's Waveshare LC29H board sits in a
+[community case from Printables](https://www.printables.com/model/1593114-case-for-lc29h-rtk-high-precision-positioning-gnss).
 
 A PETG or ASA shell that clips to a vest breast pocket or mounts on a pole,
 with the helix antenna on top and vertical for a clear view of the sky. The
